@@ -2,11 +2,11 @@
 <configuration status="OFF">
   <appenders>
     <Console name="Console" target="SYSTEM_ERR">
-      <PatternLayout pattern="%6sn [%-26.26t] %-5level %-20c{1} - %msg%n" />
+      <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss.SSS} [%-36.36t] %-5level %-20c{1} - [%method{1}:%line] - %msg%n" />
     </Console>
   </appenders>
   <Loggers>
-    <Root level="info">
+    <Root level="debug">
       <AppenderRef ref="Console" />
     </Root>
   </Loggers>

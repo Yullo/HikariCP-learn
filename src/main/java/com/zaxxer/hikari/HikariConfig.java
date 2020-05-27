@@ -16,6 +16,16 @@
 
 package com.zaxxer.hikari;
 
+import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.health.HealthCheckRegistry;
+import com.zaxxer.hikari.metrics.MetricsTrackerFactory;
+import com.zaxxer.hikari.util.PropertyElf;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.naming.InitialContext;
+import javax.naming.NamingException;
+import javax.sql.DataSource;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -28,22 +38,9 @@ import java.util.TreeSet;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
 
-import javax.naming.InitialContext;
-import javax.naming.NamingException;
-import javax.sql.DataSource;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import com.codahale.metrics.MetricRegistry;
-import com.codahale.metrics.health.HealthCheckRegistry;
-import com.zaxxer.hikari.metrics.MetricsTrackerFactory;
-import com.zaxxer.hikari.util.PropertyElf;
-
+import static com.zaxxer.hikari.util.UtilityElf.getNullIfEmpty;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.SECONDS;
-
-import static com.zaxxer.hikari.util.UtilityElf.getNullIfEmpty;
 
 public class HikariConfig implements HikariConfigMXBean
 {
@@ -896,6 +893,7 @@ public class HikariConfig implements HikariConfigMXBean
          if (!Modifier.isFinal(field.getModifiers())) {
             field.setAccessible(true);
             try {
+               // 将属性设置到 other 里
                field.set(other, field.get(this));
             }
             catch (Exception e) {

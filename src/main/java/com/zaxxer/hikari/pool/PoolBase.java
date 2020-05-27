@@ -16,9 +16,19 @@
 
 package com.zaxxer.hikari.pool;
 
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
-import static java.util.concurrent.TimeUnit.SECONDS;
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.metrics.MetricsTracker;
+import com.zaxxer.hikari.util.ClockSource;
+import com.zaxxer.hikari.util.DriverDataSource;
+import com.zaxxer.hikari.util.PropertyElf;
+import com.zaxxer.hikari.util.UtilityElf;
+import com.zaxxer.hikari.util.UtilityElf.DefaultThreadFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import javax.management.MBeanServer;
+import javax.management.ObjectName;
+import javax.sql.DataSource;
 import java.lang.management.ManagementFactory;
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -31,27 +41,14 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicReference;
 
-import javax.management.MBeanServer;
-import javax.management.ObjectName;
-import javax.sql.DataSource;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import com.zaxxer.hikari.HikariConfig;
-import com.zaxxer.hikari.metrics.MetricsTracker;
-import com.zaxxer.hikari.util.ClockSource;
-import com.zaxxer.hikari.util.DriverDataSource;
-import com.zaxxer.hikari.util.PropertyElf;
-import com.zaxxer.hikari.util.UtilityElf;
-import com.zaxxer.hikari.util.UtilityElf.DefaultThreadFactory;
-
 import static com.zaxxer.hikari.pool.ProxyConnection.DIRTY_BIT_AUTOCOMMIT;
 import static com.zaxxer.hikari.pool.ProxyConnection.DIRTY_BIT_CATALOG;
 import static com.zaxxer.hikari.pool.ProxyConnection.DIRTY_BIT_ISOLATION;
 import static com.zaxxer.hikari.pool.ProxyConnection.DIRTY_BIT_NETTIMEOUT;
 import static com.zaxxer.hikari.pool.ProxyConnection.DIRTY_BIT_READONLY;
 import static com.zaxxer.hikari.util.UtilityElf.createInstance;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static java.util.concurrent.TimeUnit.SECONDS;
 
 abstract class PoolBase
 {
@@ -105,6 +102,7 @@ abstract class PoolBase
       this.validationTimeout = config.getValidationTimeout();
       this.lastConnectionFailure = new AtomicReference<>();
 
+      // 初始化一个 DriverDataSource, 引擎层，用来创建底层的物理连接
       initializeDataSource();
    }
 
@@ -146,14 +144,14 @@ abstract class PoolBase
             if (isUseJdbc4Validation) {
                return connection.isValid((int) MILLISECONDS.toSeconds(Math.max(1000L, validationTimeout)));
             }
-   
+
             setNetworkTimeout(connection, validationTimeout);
-   
+
             try (Statement statement = connection.createStatement()) {
                if (isNetworkTimeoutSupported != TRUE) {
                   setQueryTimeout(statement, (int) MILLISECONDS.toSeconds(Math.max(1000L, validationTimeout)));
                }
-   
+
                statement.execute(config.getConnectionTestQuery());
             }
          }
@@ -338,6 +336,7 @@ abstract class PoolBase
          String username = config.getUsername();
          String password = config.getPassword();
 
+         // 使用引擎创建底层的连接
          connection = (username == null) ? dataSource.getConnection() : dataSource.getConnection(username, password);
          if (connection == null) {
             throw new SQLTransientConnectionException("DataSource returned null unexpectedly");

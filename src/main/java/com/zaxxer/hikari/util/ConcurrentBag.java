@@ -15,6 +15,10 @@
  */
 package com.zaxxer.hikari.util;
 
+import com.zaxxer.hikari.util.ConcurrentBag.IConcurrentBagEntry;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.List;
@@ -23,11 +27,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import com.zaxxer.hikari.util.ConcurrentBag.IConcurrentBagEntry;
 
 import static com.zaxxer.hikari.util.ConcurrentBag.IConcurrentBagEntry.STATE_IN_USE;
 import static com.zaxxer.hikari.util.ConcurrentBag.IConcurrentBagEntry.STATE_NOT_IN_USE;
@@ -59,9 +58,11 @@ public class ConcurrentBag<T extends IConcurrentBagEntry> implements AutoCloseab
    private static final Logger LOGGER = LoggerFactory.getLogger(ConcurrentBag.class);
 
    private final QueuedSequenceSynchronizer synchronizer;
+   // 最终存放PoolEntry的地方
    private final CopyOnWriteArrayList<T> sharedList;
    private final boolean weakThreadLocals;
 
+   // 线程级缓存，从sharedList拿到的连接对象，会被缓存进当前线程内，borrow时会先从缓存中拿，从而达到池内无锁实现
    private final ThreadLocal<List<Object>> threadList;
    private final IBagStateListener listener;
    private final AtomicInteger waiters;
@@ -129,6 +130,7 @@ public class ConcurrentBag<T extends IConcurrentBagEntry> implements AutoCloseab
          threadList.set(list);
       }
 
+      // 从 threadLocal 中获取一个连接
       for (int i = list.size() - 1; i >= 0; i--) {
          final Object entry = list.remove(i);
          @SuppressWarnings("unchecked")
@@ -145,9 +147,11 @@ public class ConcurrentBag<T extends IConcurrentBagEntry> implements AutoCloseab
       final long originTimeout = timeout;
       long startSeq;
       waiters.incrementAndGet();
+
       try {
          do {
             // scan the shared list
+            // 没有从缓存中获取到可用连接，从 sharedList中获取
             do {
                startSeq = synchronizer.currentSequence();
                for (T bagEntry : sharedList) {
@@ -162,6 +166,7 @@ public class ConcurrentBag<T extends IConcurrentBagEntry> implements AutoCloseab
                }
             } while (startSeq < synchronizer.currentSequence());
 
+            // 这里说明不光线程缓存里竞争不到连接对象，连sharedList里也找不到可用的连接，触发添加连接操作
             if (addItemFuture == null || addItemFuture.isDone()) {
                addItemFuture = listener.addBagItem();
             }
@@ -173,6 +178,7 @@ public class ConcurrentBag<T extends IConcurrentBagEntry> implements AutoCloseab
          waiters.decrementAndGet();
       }
 
+      // 超时时间内没有获取到任何连接，返回NULL
       return null;
    }
 
@@ -187,9 +193,11 @@ public class ConcurrentBag<T extends IConcurrentBagEntry> implements AutoCloseab
     */
    public void requite(final T bagEntry)
    {
+      // 归还一个连接
       bagEntry.setState(STATE_NOT_IN_USE);
 
       final List<Object> threadLocalList = threadList.get();
+      // 放到本地的线程缓存中
       if (threadLocalList != null) {
          threadLocalList.add(weakThreadLocals ? new WeakReference<>(bagEntry) : bagEntry);
       }
@@ -208,7 +216,7 @@ public class ConcurrentBag<T extends IConcurrentBagEntry> implements AutoCloseab
          LOGGER.info("ConcurrentBag has been closed, ignoring add()");
          throw new IllegalStateException("ConcurrentBag has been closed, ignoring add()");
       }
-
+      // 新的连接加到 shareList
       sharedList.add(bagEntry);
       synchronizer.signal();
    }

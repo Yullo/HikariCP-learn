@@ -16,20 +16,18 @@
 
 package com.zaxxer.hikari;
 
+import com.zaxxer.hikari.metrics.MetricsTrackerFactory;
+import com.zaxxer.hikari.pool.HikariPool;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.sql.DataSource;
 import java.io.Closeable;
 import java.io.PrintWriter;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
 import java.util.concurrent.atomic.AtomicBoolean;
-
-import javax.sql.DataSource;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import com.zaxxer.hikari.metrics.MetricsTrackerFactory;
-import com.zaxxer.hikari.pool.HikariPool;
 
 /**
  * The HikariCP pooled DataSource.
@@ -79,16 +77,21 @@ public class HikariDataSource extends HikariConfig implements DataSource, Closea
          throw new SQLException("HikariDataSource " + this + " has been closed.");
       }
 
+      //通过传入的配置创建的实际连接池的对象引用
       if (fastPathPool != null) {
          return fastPathPool.getConnection();
       }
 
+      // 通过默认构造方法创建的实例
       // See http://en.wikipedia.org/wiki/Double-checked_locking#Usage_in_Java
       HikariPool result = pool;
+
+      // 双重检查初始化pool
       if (result == null) {
          synchronized (this) {
             result = pool;
             if (result == null) {
+               // 校验配置， 不合理合法会报错
                validate();
                LOGGER.info("{} - Started.", getPoolName());
                pool = result = new HikariPool(this);

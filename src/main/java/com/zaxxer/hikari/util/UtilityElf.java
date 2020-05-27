@@ -16,8 +16,6 @@
 
 package com.zaxxer.hikari.util;
 
-import static java.util.concurrent.TimeUnit.SECONDS;
-
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.sql.Connection;
@@ -26,6 +24,8 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionHandler;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
+
+import static java.util.concurrent.TimeUnit.SECONDS;
 
 /**
  *
@@ -108,6 +108,7 @@ public final class UtilityElf
 
       LinkedBlockingQueue<Runnable> queue = new LinkedBlockingQueue<>(queueSize);
       ThreadPoolExecutor executor = new ThreadPoolExecutor(1, 1, 5, SECONDS, queue, threadFactory, policy);
+      // 是否允许回收核心线程，这个设置非常牛逼，可以减少闲时占用
       executor.allowCoreThreadTimeOut(true);
       return executor;
    }
