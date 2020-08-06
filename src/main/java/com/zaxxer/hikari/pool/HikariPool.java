@@ -201,6 +201,9 @@ public class HikariPool extends PoolBase implements HikariPoolMXBean, IBagStateL
          suspendResumeLock.release();
       }
       // 如果在超时时间内拿出的连接没一个好使的，打印一条timeout异常
+      // 只有两种情况会走到这里：
+      //  1. 池中无连接可用时，获取不到连接导致超时， （链接耗尽 或者 链接泄漏）
+      //  2. 连续从池中拿出的链接不可用（被回收 或 失效），导致超过时间限制
       throw createTimeoutException(startTime);
    }
 
